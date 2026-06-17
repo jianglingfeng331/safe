@@ -3,6 +3,8 @@ NLP 规则引擎 —— 纯正则 + 关键词匹配，零外部依赖（除 jieb
 核心思路：判断用户意图 → 提取抽屉/物品/期限。
 """
 
+from __future__ import annotations
+
 import re
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
