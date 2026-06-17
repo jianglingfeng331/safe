@@ -1,0 +1,5 @@
+flask>=3.0
+flask-sock>=0.7
+jieba>=0.42
+python-dateutil>=2.8
+dashscope>=1.20
