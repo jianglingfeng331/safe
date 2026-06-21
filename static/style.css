@@ -33,22 +33,24 @@ body {
 
 /* Quick Tags */
 .quick-tags {
-  display: flex; gap: 10px;
-  justify-content: center; flex-wrap: wrap;
+  display: flex; gap: 6px;
+  justify-content: center; flex-wrap: nowrap;
   margin-bottom: 16px;
 }
 .tag {
-  padding: 8px 18px; border-radius: 20px;
+  padding: 6px 12px; border-radius: 20px;
   border: 1px solid #E5E7EB; background: #fff;
-  font-size: 14px; color: #374151;
+  font-size: 12px; color: #374151;
   cursor: pointer; transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0; flex-shrink: 1;
 }
 .tag:active { background: #F3F4F6; }
 .tag-record { border-color: #4F46E5; color: #4F46E5; }
 .tag-find { border-color: #059669; color: #059669; }
 .tag-drawer { border-color: #D97706; color: #D97706; }
 .tag-expiry { border-color: #DC2626; color: #DC2626; }
+.tag-expired { border-color: #EA580C; color: #EA580C; }
 .tag-log { border-color: #8B5CF6; color: #8B5CF6; }
 
 /* ══════════════════════════════════════════════ */
@@ -342,6 +344,15 @@ body {
   font-weight: 500;
   flex-shrink: 0;
 }
+.pending-purpose {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 500;
+  flex-shrink: 0;
+  background: #F5F3FF;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
 
 .btn-submit-all {
   width: 100%;
@@ -427,6 +438,15 @@ body {
   font-size: 11px;
   color: #DC2626;
   font-weight: 500;
+}
+
+.result-item-purpose {
+  font-size: 11px;
+  color: #7C3AED;
+  font-weight: 500;
+  background: #F5F3FF;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .result-item-ok {
@@ -765,6 +785,7 @@ body {
   .tag-find { border-color: #34D399; color: #34D399; }
   .tag-drawer { border-color: #FBBF24; color: #FBBF24; }
   .tag-expiry { border-color: #F87171; color: #F87171; }
+  .tag-expired { border-color: #FB923C; color: #FB923C; }
   .tag-log { border-color: #A78BFA; color: #A78BFA; }
   .section-header h2 { color: #F3F4F6; }
   .empty { color: #4B5563; }
@@ -808,6 +829,7 @@ body {
   .result-item-name { color: #F3F4F6; }
   .result-item-drawer { background: #374151; color: #D1D5DB; }
   .result-loading { color: #6B7280; }
+  .result-item-purpose { background: rgba(124,58,237,0.15); color: #C4B5FD; }
   .result-item-ok { background: rgba(5,150,105,0.15); color: #34D399; }
 
   /* 登记表单暗黑 */
@@ -831,6 +853,7 @@ body {
   .pending-drawer { background: rgba(99,102,241,0.15); color: #A5B4FC; }
   .pending-name { color: #F3F4F6; }
   .pending-date { color: #FCA5A5; }
+  .pending-purpose { background: rgba(124,58,237,0.15); color: #C4B5FD; }
   .pending-arrow { color: #4B5563; }
 
   .box-card { background: #1F2937; }

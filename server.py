@@ -17,6 +17,7 @@ from db import init_db, add_item, query_item, query_item_in_drawer, list_drawer
 from db import delete_item, move_item, list_all, list_drawers, search_all
 from db import rename_drawer, delete_drawer_items, log_query, get_query_logs, check_expiring
 from db import register_user, login_user, logout_user, get_user_by_token
+from db import get_expired_items
 
 # ── 通义千问 API Key ──
 DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
@@ -349,6 +350,7 @@ def record():
     uid = request.user_id
     drawer = data.get("drawer", "").strip()
     expiry = data.get("expiry", None)
+    purpose = data.get("purpose", None) if data.get("purpose") else None
 
     items_data = data.get("items")
     if items_data:
@@ -360,11 +362,13 @@ def record():
                 if isinstance(obj, dict):
                     item_name = obj.get("name", "").strip()
                     item_expiry = obj.get("date") or expiry
+                    item_purpose = obj.get("purpose") or purpose
                 else:
                     item_name = str(obj).strip()
                     item_expiry = expiry
+                    item_purpose = purpose
                 if item_name:
-                    r = add_item(uid, drawer, item_name, item_expiry)
+                    r = add_item(uid, drawer, item_name, item_expiry, item_purpose)
                     records.append(r)
         else:
             # 字符串格式
@@ -373,14 +377,14 @@ def record():
             records = []
             for raw in raw_items:
                 item_name, item_expiry = _parse_item_with_date(raw)
-                r = add_item(uid, drawer, item_name, item_expiry or expiry)
+                r = add_item(uid, drawer, item_name, item_expiry or expiry, purpose)
                 records.append(r)
     else:
         item = data.get("item", "").strip()
         items = [item] if item else []
         if not drawer or not items:
             return jsonify({"ok": False, "error": "drawer 和 items/item 不能为空"}), 400
-        records = [add_item(uid, drawer, it, expiry) for it in items]
+        records = [add_item(uid, drawer, it, expiry, purpose) for it in items]
 
     if not drawer or not records:
         return jsonify({"ok": False, "error": "drawer 和 items/item 不能为空"}), 400
@@ -474,7 +478,18 @@ def api_delete(item_id):
 def expiring():
     days = request.args.get("days", 90, type=int)
     items = check_expiring(request.user_id, days)
-    return jsonify({"ok": True, "count": len(items), "items": items})
+    return jsonify({"ok": True, "count": len(items), "results": items})
+
+
+@app.route("/api/expired", methods=["GET"])
+@login_required
+def expired():
+    results = get_expired_items(request.user_id)
+    return jsonify({
+        "ok": True,
+        "found": len(results) > 0,
+        "results": results
+    })
 
 
 @app.route("/api/query_logs", methods=["GET"])
@@ -512,11 +527,13 @@ def _format_query_result(results: list, item: str) -> str:
     if len(results) == 1:
         r = results[0]
         exp = f"，保质期到{r['expiry']}" if r.get("expiry") else ""
-        return f"「{r['item']}」在「{r['drawer']}」{exp}"
+        purp = f"，用途：{r['purpose']}" if r.get("purpose") else ""
+        return f"「{r['item']}」在「{r['drawer']}」{exp}{purp}"
     lines = [f"找到 {len(results)} 个相关的："]
     for r in results[:5]:
         exp = f"，保质期到{r['expiry']}" if r.get("expiry") else ""
-        lines.append(f"「{r['item']}」→「{r['drawer']}」{exp}")
+        purp = f"，用途：{r['purpose']}" if r.get("purpose") else ""
+        lines.append(f"「{r['item']}」→「{r['drawer']}」{exp}{purp}")
     return "\n".join(lines)
 
 
@@ -525,7 +542,8 @@ def _format_check_result(results: list, drawer: str, item: str) -> str:
         return f"「{drawer}」里没有「{item}」"
     r = results[0]
     exp = f"，保质期到{r['expiry']}" if r.get("expiry") else ""
-    return f"有的，「{r['item']}」在「{drawer}」{exp}"
+    purp = f"，用途：{r['purpose']}" if r.get("purpose") else ""
+    return f"有的，「{r['item']}」在「{drawer}」{exp}{purp}"
 
 
 def _format_drawer_list(results: list, drawer: str) -> str:
@@ -534,7 +552,8 @@ def _format_drawer_list(results: list, drawer: str) -> str:
     lines = [f"「{drawer}」里有 {len(results)} 件物品："]
     for r in results:
         exp = f"（保质期到{r['expiry']}）" if r.get("expiry") else ""
-        lines.append(f"• {r['item']} {exp}")
+        purp = f"（用途：{r['purpose']}）" if r.get("purpose") else ""
+        lines.append(f"• {r['item']} {exp}{purp}")
     return "\n".join(lines)
 
 

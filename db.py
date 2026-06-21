@@ -46,6 +46,7 @@ def init_db():
             drawer TEXT NOT NULL,
             item TEXT NOT NULL,
             expiry TEXT DEFAULT NULL,
+            purpose TEXT DEFAULT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         )
@@ -53,6 +54,11 @@ def init_db():
     # 兼容旧表：如果 user_id 列不存在则添加
     try:
         conn.execute("ALTER TABLE items ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+    # 兼容旧表：如果 purpose 列不存在则添加
+    try:
+        conn.execute("ALTER TABLE items ADD COLUMN purpose TEXT DEFAULT NULL")
     except sqlite3.OperationalError:
         pass
     conn.execute("CREATE INDEX IF NOT EXISTS idx_items_drawer ON items(drawer)")
@@ -139,12 +145,12 @@ def get_user_by_token(token: str) -> int | None:
 #  物品 CRUD（全部带 user_id 隔离）
 # ══════════════════════════════════════════════════════
 
-def add_item(user_id: int, drawer: str, item: str, expiry: str | None = None) -> dict:
+def add_item(user_id: int, drawer: str, item: str, expiry: str | None = None, purpose: str | None = None) -> dict:
     conn = get_conn()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cur = conn.execute(
-        "INSERT INTO items (user_id, drawer, item, expiry, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (user_id, drawer.strip(), item.strip(), expiry, now, now)
+        "INSERT INTO items (user_id, drawer, item, expiry, purpose, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, drawer.strip(), item.strip(), expiry, purpose, now, now)
     )
     conn.commit()
     row = conn.execute("SELECT * FROM items WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -154,9 +160,10 @@ def add_item(user_id: int, drawer: str, item: str, expiry: str | None = None) ->
 
 def query_item(user_id: int, item: str) -> list[dict]:
     conn = get_conn()
+    kw = f"%{item.strip()}%"
     rows = conn.execute(
-        "SELECT * FROM items WHERE user_id = ? AND item LIKE ? ORDER BY updated_at DESC",
-        (user_id, f"%{item.strip()}%")
+        "SELECT * FROM items WHERE user_id = ? AND (item LIKE ? OR purpose LIKE ?) ORDER BY updated_at DESC",
+        (user_id, kw, kw)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -164,9 +171,11 @@ def query_item(user_id: int, item: str) -> list[dict]:
 
 def query_item_in_drawer(user_id: int, drawer: str, item: str) -> list[dict]:
     conn = get_conn()
+    kw_d = f"%{drawer.strip()}%"
+    kw_i = f"%{item.strip()}%"
     rows = conn.execute(
-        "SELECT * FROM items WHERE user_id = ? AND drawer LIKE ? AND item LIKE ? ORDER BY updated_at DESC",
-        (user_id, f"%{drawer.strip()}%", f"%{item.strip()}%")
+        "SELECT * FROM items WHERE user_id = ? AND drawer LIKE ? AND (item LIKE ? OR purpose LIKE ?) ORDER BY updated_at DESC",
+        (user_id, kw_d, kw_i, kw_i)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -228,8 +237,8 @@ def search_all(user_id: int, keyword: str) -> list[dict]:
     conn = get_conn()
     kw = f"%{keyword.strip()}%"
     rows = conn.execute(
-        "SELECT * FROM items WHERE user_id = ? AND (item LIKE ? OR drawer LIKE ?) ORDER BY updated_at DESC LIMIT 50",
-        (user_id, kw, kw)
+        "SELECT * FROM items WHERE user_id = ? AND (item LIKE ? OR drawer LIKE ? OR purpose LIKE ?) ORDER BY updated_at DESC LIMIT 50",
+        (user_id, kw, kw, kw)
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -285,12 +294,28 @@ def check_expiring(user_id: int, days: int = 90) -> list:
     """返回 user_id 下 expiry 在 days 天内的物品，按到期日升序"""
     conn = get_conn()
     cur = conn.execute(
-        """SELECT id, user_id, drawer, item, expiry, created_at, updated_at
+        """SELECT id, user_id, drawer, item, expiry, purpose, created_at, updated_at
            FROM items
            WHERE user_id = ? AND expiry IS NOT NULL AND expiry != ''
              AND date(expiry) BETWEEN date('now','localtime') AND date('now','localtime','+' || ? || ' days')
            ORDER BY expiry ASC""",
         (user_id, days)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_expired_items(user_id: int) -> list:
+    """返回 user_id 下所有已过期物品（expiry < 今天），按到期日升序"""
+    conn = get_conn()
+    cur = conn.execute(
+        """SELECT id, user_id, drawer, item, expiry, purpose, created_at, updated_at
+           FROM items
+           WHERE user_id = ? AND expiry IS NOT NULL AND expiry != ''
+             AND date(expiry) < date('now','localtime')
+           ORDER BY expiry ASC""",
+        (user_id,)
     )
     rows = cur.fetchall()
     conn.close()

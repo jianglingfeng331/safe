@@ -9,7 +9,10 @@
   <meta name="apple-mobile-web-app-title" content="没丢">
   <meta name="theme-color" content="#4F46E5">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
   <title>没丢</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -65,8 +68,9 @@
   <div class="quick-tags">
     <button class="tag tag-record" onclick="switchMode('record')">登记</button>
     <button class="tag tag-find" onclick="switchMode('find')">查找</button>
-    <button class="tag tag-drawer" onclick="switchMode('drawer')">看箱子</button>
+    <button class="tag tag-drawer" onclick="switchMode('drawer')">箱子</button>
     <button class="tag tag-expiry" onclick="switchMode('expiry')">临期</button>
+    <button class="tag tag-expired" onclick="switchMode('expired')">到期</button>
   </div>
 
   <!-- 自然语言输入区域（查找模式） -->
@@ -93,6 +97,7 @@
         <input type="text" id="recordDrawer" class="record-input" placeholder="箱子（如：药箱）" list="drawerList" autocomplete="off">
         <datalist id="drawerList"></datalist>
         <input type="text" id="recordItem" class="record-input" placeholder="物品（如：头孢）">
+        <input type="text" id="recordPurpose" class="record-input" placeholder="用途（可选，如：退烧）">
         <input type="text" id="recordDate" class="record-input" placeholder="到期时间（可选，如 20260630）">
       </div>
       <button class="btn-add-item" onclick="addRecordItem()">添加到列表</button>
@@ -100,7 +105,7 @@
 
     <!-- 批量录入 -->
     <div id="recordBatch" class="record-batch hidden">
-      <textarea id="batchInput" class="batch-textarea" placeholder="每行一条，格式：箱子,物品,到期时间&#10;到期时间可选，示例：&#10;药箱,头孢,20260630&#10;药箱,创可贴&#10;冰箱,酸奶,2026-06-20"></textarea>
+      <textarea id="batchInput" class="batch-textarea" placeholder="每行一条，格式：箱子,物品,用途,到期时间&#10;用途和到期时间可选，示例：&#10;药箱,头孢,退烧,20260630&#10;药箱,创可贴&#10;冰箱,酸奶,,2026-06-20"></textarea>
       <button class="btn-parse" onclick="parseBatch()">解析预览</button>
     </div>
 

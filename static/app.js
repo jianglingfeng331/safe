@@ -214,7 +214,8 @@ function showResult(data) {
         html += '<div class="result-items">';
         data.results.forEach(r => {
             const expStr = r.expiry ? ` <span class="result-item-expiry">至${escapeHtml(r.expiry)}</span>` : '';
-            html += `<div class="result-item"><span class="result-item-name">${escapeHtml(r.item)}</span><span class="result-item-drawer">${escapeHtml(r.drawer)}</span>${expStr}</div>`;
+            const purpStr = r.purpose ? ` <span class="result-item-purpose">${escapeHtml(r.purpose)}</span>` : '';
+            html += `<div class="result-item"><span class="result-item-name">${escapeHtml(r.item)}</span><span class="result-item-drawer">${escapeHtml(r.drawer)}</span>${purpStr}${expStr}</div>`;
         });
         html += '</div>';
     }
@@ -268,11 +269,12 @@ function parseDate(str) {
 //  登记表单 — 待提交记录管理
 // ══════════════════════════════════════════════════
 
-let pendingRecords = [];  // {drawer, item, date}
+let pendingRecords = [];  // {drawer, item, purpose, date}
 
 function addRecordItem() {
     const drawer = document.getElementById('recordDrawer').value.trim();
     const item = document.getElementById('recordItem').value.trim();
+    const purpose = document.getElementById('recordPurpose').value.trim();
     const dateRaw = document.getElementById('recordDate').value.trim();
 
     if (!drawer) { showToast('请输入箱子名'); return; }
@@ -280,10 +282,11 @@ function addRecordItem() {
 
     const date = parseDate(dateRaw);
 
-    pendingRecords.push({ drawer, item, date });
+    pendingRecords.push({ drawer, item, purpose, date });
 
     // 清空输入
     document.getElementById('recordItem').value = '';
+    document.getElementById('recordPurpose').value = '';
     document.getElementById('recordDate').value = '';
     document.getElementById('recordItem').focus();
 
@@ -302,21 +305,22 @@ function parseBatch() {
     const errors = [];
 
     lines.forEach((line, idx) => {
-        // 按逗号（中英文）或制表符分割，最多 3 段
-        const parts = line.split(/[,，\t]+/).map(s => s.trim()).filter(s => s);
+        // 按逗号（中英文）或制表符分割，最多 4 段
+        const parts = line.split(/[,，\t]+/).map(s => s.trim());
         if (parts.length < 2) {
             errors.push(`第 ${idx + 1} 行格式错误（至少需要箱子,物品）：${line}`);
             return;
         }
         const drawer = parts[0];
         const item = parts[1];
-        const dateRaw = parts[2] || '';
+        const purpose = parts[2] || '';
+        const dateRaw = parts[3] || '';
         const date = parseDate(dateRaw);
         if (dateRaw && !date) {
             errors.push(`第 ${idx + 1} 行日期无法识别：${dateRaw}`);
             return;
         }
-        parsed.push({ drawer, item, date });
+        parsed.push({ drawer, item, purpose, date });
     });
 
     if (errors.length > 0) {
@@ -345,11 +349,12 @@ function renderPendingList() {
     countSpan.textContent = `（${pendingRecords.length} 条）`;
 
     itemsDiv.innerHTML = pendingRecords.map((r, i) => {
+        const purpStr = r.purpose ? ` <span class="pending-purpose">${escapeHtml(r.purpose)}</span>` : '';
         const dateStr = r.date ? ` <span class="pending-date">到期 ${escapeHtml(r.date)}</span>` : '';
         return `<div class="pending-item">
             <span class="pending-drawer">${escapeHtml(r.drawer)}</span>
             <span class="pending-arrow">→</span>
-            <span class="pending-name">${escapeHtml(r.item)}</span>${dateStr}
+            <span class="pending-name">${escapeHtml(r.item)}</span>${purpStr}${dateStr}
             <button class="btn-icon-mini" onclick="removePendingItem(${i})" title="移除">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -374,7 +379,10 @@ async function submitAllRecords() {
     const groups = {};
     pendingRecords.forEach(r => {
         if (!groups[r.drawer]) groups[r.drawer] = [];
-        groups[r.drawer].push({ name: r.item, date: r.date || undefined });
+        const obj = { name: r.item };
+        if (r.purpose) obj.purpose = r.purpose;
+        if (r.date) obj.date = r.date;
+        groups[r.drawer].push(obj);
     });
 
     const drawerNames = Object.keys(groups);
@@ -505,8 +513,9 @@ async function loadLogSection() {
         if (recentData.items && recentData.items.length > 0) {
             recentData.items.slice(0, 30).forEach(r => {
                 const t = r.created_at ? r.created_at.slice(5, 16).replace('T', ' ') : '';
+                const purp = r.purpose ? `（${r.purpose}）` : '';
                 items.push({
-                    summary: `登记了「${r.item}」→ ${r.drawer}`,
+                    summary: `登记了「${r.item}」${purp}→ ${r.drawer}`,
                     intent: '登记',
                     time: t
                 });
@@ -591,6 +600,8 @@ function switchMode(mode) {
         loadBoxes();
     } else if (mode === 'expiry') {
         loadExpiring();
+    } else if (mode === 'expired') {
+        loadExpired();
     }
 }
 
@@ -609,6 +620,27 @@ async function loadExpiring() {
             } else {
                 resultArea.innerHTML = '<div class="result-msg">没有临期物品</div>';
             }
+        }
+    } catch { showToast('查询失败'); }
+}
+
+// ══════════════════════════════════════════════════
+//  到期查询
+// ══════════════════════════════════════════════════
+
+async function loadExpired() {
+    resultArea.classList.remove('hidden');
+    resultArea.innerHTML = '<div class="result-loading">查询中...</div>';
+    try {
+        const data = await api('/api/expired');
+        if (data.ok) {
+            if (data.results && data.results.length > 0) {
+                showResult(data);
+            } else {
+                resultArea.innerHTML = '<div class="result-msg">没有已过期物品</div>';
+            }
+        } else {
+            resultArea.innerHTML = `<div class="result-error">${data.error || '查询失败'}</div>`;
         }
     } catch { showToast('查询失败'); }
 }
@@ -680,9 +712,10 @@ async function viewBox(drawerName) {
                 else if (dl <= 30) expBadge = `<span class="exp-badge warning">${dl}天到期</span>`;
                 else expBadge = `<span class="exp-badge ok">${r.expiry}</span>`;
             }
+            const purpBadge = r.purpose ? `<span class="exp-badge ok">${escapeHtml(r.purpose)}</span>` : '';
             return `<div class="item-card accent-${hashCode(drawerName)%8}">
-              <div class="item-body"><span class="item-name">${r.item}</span>${expBadge}</div>
-              <button class="btn-icon-mini" onclick="deleteItem(${r.id},'${r.item.replace(/'/g,"\\'")}')" title="删除">
+              <div class="item-body"><span class="item-name">${escapeHtml(r.item)}</span>${purpBadge}${expBadge}</div>
+              <button class="btn-icon-mini" onclick="deleteItem(${r.id},'${escapeHtml(r.item).replace(/'/g,"\\'")}')" title="删除">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button></div>`;
         }).join('');
